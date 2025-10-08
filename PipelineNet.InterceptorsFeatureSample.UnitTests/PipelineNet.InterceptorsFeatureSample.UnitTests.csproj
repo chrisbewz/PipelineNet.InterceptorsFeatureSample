@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <IsPackable>false</IsPackable>
+        <IsTestProject>true</IsTestProject>
+        <TargetFramework>net9.0</TargetFramework>
+        <LangVersion>latestmajor</LangVersion>
+    </PropertyGroup>
+
+    <ItemGroup>
+        <PackageReference Include="JetBrains.Annotations" Version="2025.2.2"/>
+        <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.9"/>
+        <PackageReference Include="Microsoft.Extensions.Logging" Version="9.0.9"/>
+        <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.9"/>
+    </ItemGroup>
+
+    <ItemGroup>
+        <ProjectReference Include="..\PipelineNet.InterceptorsFeatureSample\PipelineNet.InterceptorsFeatureSample.csproj"/>
+    </ItemGroup>
+
+    <ItemGroup Condition="'$(IsTestProject)' == 'true'">
+        <PackageReference Include="coverlet.collector" Version="$(CoverletVersion)"/>
+        <PackageReference Include="Microsoft.NET.Test.Sdk" Version="$(MicrosoftNetTestSdkVersion)"/>
+        <PackageReference Include="xunit" Version="$(XUnitVersion)"/>
+        <PackageReference Include="xunit.runner.visualstudio" Version="$(XUnitRunnerVersion)"/>
+        <PackageReference Include="NSubstitute" Version="$(NSubstituteVersion)"/>
+        <PackageReference Include="NSubstitute.Analyzers.CSharp" Version="$(NSubstituteAnalyzersVersion)"/>
+        <PackageReference Include="Shouldly" Version="4.3.0"/>
+        <Using Include="Xunit"/>
+    </ItemGroup>
+</Project>

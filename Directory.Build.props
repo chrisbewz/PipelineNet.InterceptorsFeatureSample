@@ -1,0 +1,10 @@
+<Project>
+    <PropertyGroup>
+        <XUnitVersion>2.5.3</XUnitVersion>
+        <XUnitRunnerVersion>$(XUnitVersion)</XUnitRunnerVersion>
+        <MicrosoftNetTestSdkVersion>17.8.0</MicrosoftNetTestSdkVersion>
+        <CoverletVersion>6.0.0</CoverletVersion>
+        <NSubstituteVersion>5.3.0</NSubstituteVersion>
+        <NSubstituteAnalyzersVersion>1.0.17</NSubstituteAnalyzersVersion>
+    </PropertyGroup>
+</Project>
