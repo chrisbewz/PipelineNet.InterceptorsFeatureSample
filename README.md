@@ -1,6 +1,6 @@
 # Feature : Middleware/Pipeline Interceptors Support 
 
-This repository demonstrates a proposed feature for PipelineNet: first-class interceptor support for middlewares. 
+This repository demonstrates a proposed feature for [PipelineNet](https://github.com/ipvalverde/PipelineNet): first-class interceptor support for middlewares. 
 
 The goal is to enable pre/post middlewares execution behaviors around the existing traits, this way cross-cutting concerns can be added as needed on pipelines.
 
