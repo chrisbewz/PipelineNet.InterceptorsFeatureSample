@@ -34,7 +34,7 @@ public class InterceptorMiddlewareDecorator<TParameter, TReturn> :
     /// <typeparam name="TReturn"></typeparam>
     public InterceptorMiddlewareDecorator(
         IAsyncMiddleware<TParameter, TReturn> inner,
-        params IInterceptorMiddlewareDecorator<TParameter, TReturn>[] interceptors)
+        IInterceptorMiddlewareDecorator<TParameter, TReturn>[] interceptors)
     {
         _ = Guard.Against.Null(inner, nameof(inner));
         _ = Guard.Against.Null(interceptors, nameof(interceptors));

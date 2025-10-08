@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using Ardalis.GuardClauses;
 using Microsoft.Extensions.DependencyInjection;
 using PipelineNet.InterceptorsFeatureSample.Middlewares.Decorators;
+using PipelineNet.Middleware;
 using PipelineNet.MiddlewareResolver;
 
 namespace PipelineNet.InterceptorsFeatureSample.Middlewares;
@@ -40,8 +41,6 @@ public sealed class InterceptorAwareMiddlewareResolver(IServiceProvider serviceP
     private bool TryResolveInternal(Type type, IServiceProvider sp, out MiddlewareResolverResult result)
     {
         result = null;
-        if (type is { IsGenericType: true })
-            type = type.GetGenericTypeDefinition();
 
         if (!MiddlewareHelpers.IsMiddlewareType(type) && !MiddlewareHelpers.ImplementsMiddlewareInterface(type))
             return false;
@@ -66,8 +65,22 @@ public sealed class InterceptorAwareMiddlewareResolver(IServiceProvider serviceP
         return true;
     }
 
+    // TODO: current decorator logic was made focusing on IAsyncMiddleware and its related traits that have arity of 2
+    //       it might be worth to return here and extend the support to decorate other middleware traits
     private object? Decorate(IServiceProvider sp, Type middlewareType)
     {
+        Predicate<Type> decorationConditions = t =>
+        {
+            if (middlewareType.IsInterface || middlewareType.IsGenericType || middlewareType.IsGenericTypeDefinition)
+                return t.GetGenericTypeDefinition() == typeof(IAsyncMiddleware<,>);
+            return MiddlewareHelpers.ImplementsMiddlewareInterface(t) && t.GetInterfaces().Any(i => i.IsGenericType && i.GetGenericTypeDefinition() == typeof(IAsyncMiddleware<,>));
+        };
+        
+        _ = Guard.Against.InvalidInput(middlewareType,
+            nameof(middlewareType),
+            t => decorationConditions(t),
+            "Expected a middleware type that implements IAsyncMiddleware<,>. Other middleware traits are not supported yet.");
+        
         // Resolve the actual middleware instance
         object middleware = this.TryResolveMiddlewareFromProvider(sp, middlewareType);
 
@@ -81,15 +94,14 @@ public sealed class InterceptorAwareMiddlewareResolver(IServiceProvider serviceP
 
         // Get interceptor types for this middleware
         ImmutableList<Type>? interceptorTypes = registry.GetInterceptorsForMiddleware(middlewareType);
-
+        
         // Extract generic arguments from the interface
-        Type[] genericArgs = middlewareType.GetGenericArguments();
+        // At this point we can guarantee that the middleware implements IAsyncMiddleware<,> so its safe to attempt extracting its arguments from runtime type
+        var genericArgs = TryGetGenericArguments(middlewareType);
 
-        if (genericArgs.Length != 2)
-            // TODO: current decorator logic was made focusing on IAsyncMiddleware and its related traits that have arity of 2
-            //       it might be worth to return here and extend the support to decorate other middleware traits
-            return middleware; // Can't decorate, return as-is
-
+        // Another guard to ensure we have exactly 2 generic arguments since we are only supporting IAsyncMiddleware<,> for now
+        _ = Guard.Against.InvalidInput(genericArgs.Length, nameof(genericArgs),c  => c == 2);
+        
         Type inputType = genericArgs[0];
         Type returnType = genericArgs[1];
 
@@ -97,9 +109,20 @@ public sealed class InterceptorAwareMiddlewareResolver(IServiceProvider serviceP
         object[] resolvedInterceptors = ResolveInterceptors(sp, interceptorTypes, inputType, returnType);
 
         Type decoratorType = typeof(InterceptorMiddlewareDecorator<,>).MakeGenericType(inputType, returnType);
-        object? decorator = Activator.CreateInstance(decoratorType, middleware, resolvedInterceptors);
+        
+        Array typedInterceptorArray = Array.CreateInstance(typeof(IInterceptorMiddlewareDecorator<,>).MakeGenericType(inputType, returnType), resolvedInterceptors.Length);
+        Array.Copy(resolvedInterceptors, typedInterceptorArray, resolvedInterceptors.Length);
+        
+        object? decorator = Activator.CreateInstance(decoratorType, middleware, typedInterceptorArray);
 
         return decorator;
+    }
+
+    private static Type[] TryGetGenericArguments(Type middlewareType)
+    {
+        Type inner = middlewareType;
+
+        return inner.IsInterface ? inner.GetGenericArguments() : inner.GetInterfaces().First(it => it.IsGenericType && it.GetGenericTypeDefinition() == typeof(IAsyncMiddleware<,>)).GetGenericArguments();
     }
 
     private object TryResolveMiddlewareFromProvider(IServiceProvider sp, Type middlewareType)
@@ -124,25 +147,29 @@ public sealed class InterceptorAwareMiddlewareResolver(IServiceProvider serviceP
         foreach (Type interceptorType in interceptorTypes)
         {
             Type concreteType = interceptorType;
-
+            object? interceptor = null;
             // Handle open generic types
             if (interceptorType.IsGenericTypeDefinition)
             {
                 concreteType = interceptorType.MakeGenericType(inputType, returnType);
-            }
-
-            // Try to resolve from DI
-            Type interceptorInterfaceType =
-                typeof(IInterceptorMiddlewareDecorator<,>).MakeGenericType(inputType, returnType);
-            object? interceptor = sp.GetService(interceptorInterfaceType);
-
-            if (interceptor != null)
-            {
-                interceptors.Add(interceptor);
+                
+                // This should work for generic types as long 
+                // since scrutor which is used when calling AddInterceptor methods from MiddlewareServiceCollectionExtensions
+                // is expected to register InterceptorBase<TParameter, TReturn> implementations with its implemented interfaces too,
+                // which does include IInterceptorMiddlewareDecorator<,>
+                Type interceptorInterfaceType =
+                    typeof(IInterceptorMiddlewareDecorator<,>).MakeGenericType(inputType, returnType);
+                interceptor = sp.GetService(interceptorInterfaceType);
             }
             else
+                // Fallback to concrete type
+                interceptor = sp.GetService(concreteType);
+
+            if (interceptor != null)
+                interceptors.Add(interceptor);
+            // As last option try to create instance using ActivatorUtilities
+            else
             {
-                // Fallback: create instance using ActivatorUtilities
                 try
                 {
                     object instance = ActivatorUtilities.CreateInstance(sp, concreteType);
@@ -150,7 +177,7 @@ public sealed class InterceptorAwareMiddlewareResolver(IServiceProvider serviceP
                 }
                 catch
                 {
-                    // Skip interceptors that can't be created
+                    // Ignored on this sample but might be worth to handle errors here somehow
                     continue;
                 }
             }

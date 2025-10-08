@@ -191,14 +191,9 @@ public static class MiddlewareServiceCollectionExtensions
         IEnumerable<Assembly> assemblies,
         ServiceLifetime lifetime = ServiceLifetime.Scoped)
     {
-        List<Assembly> assemblyList = assemblies?.ToList() ?? [];
-
-        foreach (Assembly assembly in assemblyList)
-        {
-            services.AddMiddlewareFromAssembly(assembly, lifetime);
-        }
-
-        return services;
+        return services.Scan(s => s.FromAssemblies(assemblies.ToArray())
+            .AddClasses(c => c.Where(MiddlewareHelpers.ImplementsMiddlewareInterface))
+            .AsSelfWithInterfaces(MiddlewareHelpers.IsMiddlewareType));
     }
 
     /// <summary>
